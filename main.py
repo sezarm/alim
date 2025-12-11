@@ -214,45 +214,7 @@ cur.execute('''CREATE TABLE IF NOT EXISTS banlist(
     idgp BIGINT,
     ban BIGINT
 )''')
-cur.execute('''CREATE TABLE IF NOT EXISTS custom_media(
-    chat_id BIGINT PRIMARY KEY,
-    media_type TEXT,
-    file_id TEXT
-)''')
-cur.execute('''CREATE TABLE IF NOT EXISTS command_access(
-    chat_id BIGINT,
-    command TEXT,
-    access_level TEXT,
-    PRIMARY KEY (chat_id, command)
-)''')
-cur.execute('''CREATE TABLE IF NOT EXISTS visualizer(
-    chat_id BIGINT PRIMARY KEY,
-    file_id TEXT,
-    is_enabled BOOLEAN DEFAULT 0
-)''')
-cur.execute('''CREATE TABLE IF NOT EXISTS play_history(
-    chat_id BIGINT,
-    user_id BIGINT,
-    media_type TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-)''')
 db.commit()
-
-# Add indexes for performance
-cur.execute('CREATE INDEX IF NOT EXISTS idx_gp_idgp ON gp(idgp)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_charge_idgp ON charge(idgp)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_charge2_idgp ON charge2(idgp)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_users_iduser ON users(iduser)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_videoadmins_idgp ON videoadmins(idgp)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_musicadmin_idgp ON musicadmin(idgp)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_sudo_idsudo ON sudo(idsudo)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_owner_idowner ON owner(idowner)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_creators_idgp ON creators(idgp)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_creators_creator ON creators(creator)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_ejbar_idgp ON ejbar(idgp)')
-cur.execute('CREATE INDEX IF NOT EXISTS idx_banlist_idgp ON banlist(idgp)')
-db.commit()
-
 
 # if os.path.isfile('chnl.txt'):
 #     pass
@@ -338,7 +300,7 @@ def idowner():
 
 def idmusic(chat_id):
     lis = []
-    cur.execute('SELECT * FROM musicadmin WHERE idgp=?', (chat_id,))
+    cur.execute(f'SELECT * FROM musicadmin WHERE idgp={chat_id}')
     x = cur.fetchall()
     if x == []:
         return []
@@ -348,7 +310,7 @@ def idmusic(chat_id):
 
 def idvideo(chat_id):
     lis = []
-    cur.execute('SELECT * FROM videoadmins WHERE idgp=?', (chat_id,))
+    cur.execute(f'SELECT * FROM videoadmins WHERE idgp={chat_id}')
     x = cur.fetchall()
     if x == []:
         return []
@@ -378,7 +340,7 @@ def allmusic():
 
 def creators(chat_id):
     lis = []
-    cur.execute('SELECT * FROM creators WHERE idgp=?', (chat_id,))
+    cur.execute(f'SELECT * FROM creators WHERE idgp={chat_id}')
     x = cur.fetchall()
     if x == []:
         return []
@@ -439,7 +401,7 @@ def insvideo():
 
 def moz(status:int):
     lis = []
-    cur.execute('SELECT * FROM charge WHERE status=?', (status,))
+    cur.execute(f'SELECT * FROM charge WHERE status={status}')
     x = cur.fetchall()
     if x == []:
         return []
@@ -450,7 +412,7 @@ def moz(status:int):
 
 def kir(status:int):
     lis = []
-    cur.execute('SELECT * FROM charge2 WHERE status=?', (status,))
+    cur.execute(f'SELECT * FROM charge2 WHERE status={status}')
     x = cur.fetchall()
     if x == []:
         return []
@@ -465,7 +427,7 @@ def kir(status:int):
 
 async def checkjoin(c:Client, m:Message, user_id):
     list_moaf = []
-    cur.execute('SELECT * FROM ejbar WHERE idgp=?', (m.chat.id,))
+    cur.execute(f'SELECT * FROM ejbar WHERE idgp={m.chat.id}')
     x = cur.fetchall()
     if x == []:
         pass
@@ -501,50 +463,7 @@ async def checkjoin(c:Client, m:Message, user_id):
 
 ######################################################################
 
-async def send_custom_media_or_default(c: Client, chat_id: int, caption: str, reply_to_message_id: int, reply_markup: InlineKeyboardMarkup):
-    cur.execute('SELECT media_type, file_id FROM custom_media WHERE chat_id = ?', (chat_id,))
-    custom_media = cur.fetchone()
-
-    if custom_media:
-        media_type, file_id = custom_media
-        try:
-            if media_type == 'photo':
-                await c.send_photo(chat_id, file_id, caption=caption, reply_to_message_id=reply_to_message_id, reply_markup=reply_markup)
-            elif media_type == 'animation':
-                await c.send_animation(chat_id, file_id, caption=caption, reply_to_message_id=reply_to_message_id, reply_markup=reply_markup)
-            elif media_type == 'video':
-                await c.send_video(chat_id, file_id, caption=caption, reply_to_message_id=reply_to_message_id, reply_markup=reply_markup)
-            return
-        except Exception as e:
-            print(f"Error sending custom media: {e}")
-            # Fallback to default if sending custom media fails
-
-    # Default fallback
-    try:
-        await c.send_photo(chat_id, './mersad.jpg', caption=caption, reply_to_message_id=reply_to_message_id, reply_markup=reply_markup)
-    except:
-        await c.send_video(chat_id, './mersad.mp4', caption=caption, reply_to_message_id=reply_to_message_id, reply_markup=reply_markup)
-
 ######################################################################
-
-async def check_access(chat_id: int, user_id: int, command: str) -> bool:
-    cur.execute('SELECT access_level FROM command_access WHERE chat_id = ? AND command = ?', (chat_id, command))
-    result = cur.fetchone()
-    access_level = result[0] if result else 'مدیران'
-
-    if access_level == 'همه':
-        return True
-
-    member = await api.get_chat_member(chat_id, user_id)
-    is_admin = member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
-    is_owner = member.status == ChatMemberStatus.OWNER
-
-    if access_level == 'مدیران' and (is_admin or user_id in [*idsudos(), *idowner(), sudo, mersad]):
-        return True
-    if access_level == 'مالک' and (is_owner or user_id in [*idsudos(), *idowner(), sudo, mersad]):
-        return True
-
-    return False
 
 api.start()
 call_py.start()
@@ -627,10 +546,10 @@ async def startt(c:Client, m:Message):
             ['▪️ خروج خودکار فعال','▫️ خروج خودکار غیرفعال']
             ],resize_keyboard=True,one_time_keyboard=True
         ))
-    cur.execute('SELECT * FROM users WHERE iduser=?', (m.chat.id,))
+    cur.execute(f'SELECT * FROM users WHERE iduser={m.chat.id}')
     if cur.fetchall()==[]:
         try:
-            cur.execute('INSERT INTO users(iduser) VALUES(?)', (m.chat.id,))
+            cur.execute(f'INSERT INTO users(iduser) VALUES({m.chat.id})')
         except sqlite3.OperationalError:
             os.system('fuser -k database.sqlite')
             cur.execute(f'INSERT INTO users(iduser) VALUES({m.chat.id})')
@@ -1024,7 +943,7 @@ async def addsudopv(c:Client,m:Message):
     except:
         await c.send_message(chat_id,'**•** کاربر مورد نظر یافت نشد **!**',reply_to_message_id=message_id)
         return
-    cur.execute('SELECT * FROM sudo WHERE idsudo=?', (req.id,))
+    cur.execute(f'SELECT * FROM sudo WHERE idsudo={req.id}')
     if cur.fetchall() != []:
         await m.reply('• این کاربر از قبل در لیست سودو ها موجود میباشد !')
         return
@@ -1053,7 +972,7 @@ async def delsudopv(c:Client,m:Message):
     except:
         await c.send_message(chat_id,'**⌯** کاربر مورد نظر یافت نشد **!**')
         return
-    cur.execute('DELETE FROM sudo WHERE idsudo=?', (int(sud.text),))
+    cur.execute(f'DELETE FROM sudo WHERE idsudo={int(sud.text)}')
     db.commit()
     await c.send_message(chat_id,f'''
 **◆ یک کاربر با موفقیت از لیست سودو های ربات حذف شد !**
@@ -1247,10 +1166,10 @@ async def etebargp(c:Client,m:Message):
         status_music = 0
         etebar_video = 0
         status_video = 0
-        cur.execute('SELECT * FROM charge WHERE idgp=?', (c_id,))
+        cur.execute(f'SELECT * FROM charge WHERE idgp={c_id}')
         if cur.fetchone() != None:
             eteb = []
-            cur.execute('SELECT * FROM charge WHERE idgp=?', (c_id,))
+            cur.execute(f'SELECT * FROM charge WHERE idgp={c_id}')
             for i in cur.fetchall()[0]:
                 eteb.append(i)
             if eteb[5] == 0:
@@ -1259,10 +1178,10 @@ async def etebargp(c:Client,m:Message):
             elif eteb[5] == 1:
                 etebar_music = int(int(eteb[4] - time.time()) / 60 / 60)
                 status_music = 1
-        cur.execute('SELECT * FROM charge2 WHERE idgp=?', (c_id,))
+        cur.execute(f'SELECT * FROM charge2 WHERE idgp={c_id}')
         if cur.fetchone() != None:
             eteb = []
-            cur.execute('SELECT * FROM charge2 WHERE idgp=?', (c_id,))
+            cur.execute(f'SELECT * FROM charge2 WHERE idgp={c_id}')
             for i in cur.fetchall()[0]:
                 eteb.append(i)
             if eteb[5] == 0:
@@ -1369,13 +1288,13 @@ async def updatech(c:Client,m:Message):
         text = text.replace('اپدیت شارژ ویدیو ','')
         text = text.replace('آپدیت شارژ ویدیو ','')
         text = text.split(' ')
-        cur.execute('SELECT * FROM charge2 WHERE idgp=?', (int(text[0]),))
+        cur.execute(f'SELECT * FROM charge2 WHERE idgp={int(text[0])}')
         if cur.fetchone() != None:
-            cur.execute('UPDATE charge2 SET end=? WHERE idgp=?', (time.time() + float(int(text[1]) * 24 * 60 * 60), int(text[0])))
+            cur.execute(f'UPDATE charge2 SET end={time.time() + float(int(text[1]) * 24 * 60 * 60)} WHERE idgp={int(text[0])}')
             db.commit()
-            cur.execute('UPDATE charge2 SET day=? WHERE idgp=?', (int(text[1]), int(text[0])))
+            cur.execute(f'UPDATE charge2 SET day={int(text[1])} WHERE idgp={int(text[0])}')
             db.commit()
-            cur.execute('UPDATE charge2 SET status=0 WHERE idgp=?', (int(text[0]),))
+            cur.execute(f'UPDATE charge2 SET status=0 WHERE idgp={int(text[0])}')
             db.commit()
             await c.send_message(chat_id,'**⌯** شارژ ویدیو آپدیت شد **!**',reply_to_message_id=m.id)
             hour = jdatetime.datetime.now().strftime("%H:%M:%S")
@@ -1437,14 +1356,14 @@ async def updategp(c:Client,m:Message):
         else:
             c_id = str(chat_id)
             try:
-                cur.execute('SELECT * FROM charge2 WHERE idgp=?', (int(c_id),))
+                cur.execute(f'SELECT * FROM charge2 WHERE idgp={int(c_id)}')
                 db.commit()
                 if cur.fetchone() != None:
-                    cur.execute('UPDATE charge2 SET day=? WHERE idgp=?', (int(text), c_id))
+                    cur.execute(f'UPDATE charge2 SET day={int(text)} WHERE idgp={c_id}')
                     db.commit()
-                    cur.execute('UPDATE charge2 SET end=? WHERE idgp=?', (time.time() + float(int(text) * 24 * 60 * 60), c_id))
+                    cur.execute(f'UPDATE charge2 SET end={time.time() + float(int(text) * 24 * 60 * 60)} WHERE idgp={c_id}')
                     db.commit()
-                    cur.execute('UPDATE charge2 SET status=0 WHERE idgp=?', (c_id,))
+                    cur.execute(f'UPDATE charge2 SET status=0 WHERE idgp={c_id}')
                     db.commit()
                     await c.send_message(chat_id,'**⌯** شارژ گروه آپدیت شد **!**',reply_to_message_id=m.id)
                     hour = jdatetime.datetime.now().strftime("%H:%M:%S")
@@ -1501,13 +1420,13 @@ async def updatech(c:Client,m:Message):
         text = text.replace('اپدیت شارژ ','')
         text = text.replace('آپدیت شارژ ','')
         text = text.split(' ')
-        cur.execute('SELECT * FROM charge WHERE idgp=?', (int(text[0]),))
+        cur.execute(f'SELECT * FROM charge WHERE idgp={int(text[0])}')
         if cur.fetchone() != None:
-            cur.execute('UPDATE charge SET end=? WHERE idgp=?', (time.time() + float(int(text[1]) * 24 * 60 * 60), int(text[0])))
+            cur.execute(f'UPDATE charge SET end={time.time() + float(int(text[1]) * 24 * 60 * 60)} WHERE idgp={int(text[0])}')
             db.commit()
-            cur.execute('UPDATE charge SET day=? WHERE idgp=?', (int(text[1]), int(text[0])))
+            cur.execute(f'UPDATE charge SET day={int(text[1])} WHERE idgp={int(text[0])}')
             db.commit()
-            cur.execute('UPDATE charge SET status=0 WHERE idgp=?', (int(text[0]),))
+            cur.execute(f'UPDATE charge SET status=0 WHERE idgp={int(text[0])}')
             db.commit()
             await c.send_message(chat_id,'**⌯** شارژ موزیک آپدیت شد **!**',reply_to_message_id=m.id)
             hour = jdatetime.datetime.now().strftime("%H:%M:%S")
@@ -1568,14 +1487,14 @@ async def updategp(c:Client,m:Message):
         else:
             c_id = str(chat_id)
             try:
-                cur.execute('SELECT * FROM charge WHERE idgp=?', (c_id,))
+                cur.execute(f'SELECT * FROM charge WHERE idgp={c_id}')
                 db.commit()
                 if cur.fetchone() != None:
-                    cur.execute('UPDATE charge SET day=? WHERE idgp=?', (int(text), c_id))
+                    cur.execute(f'UPDATE charge SET day={int(text)} WHERE idgp={c_id}')
                     db.commit()
-                    cur.execute('UPDATE charge SET end=? WHERE idgp=?', (time.time() + float(int(text) * 24 * 60 * 60), c_id))
+                    cur.execute(f'UPDATE charge SET end={time.time() + float(int(text) * 24 * 60 * 60)} WHERE idgp={c_id}')
                     db.commit()
-                    cur.execute('UPDATE charge SET status=0 WHERE idgp=?', (c_id,))
+                    cur.execute(f'UPDATE charge SET status=0 WHERE idgp={c_id}')
                     db.commit()
                     await c.send_message(chat_id,'**⌯** شارژ گروه آپدیت شد **!**',reply_to_message_id=m.id)
                     hour = jdatetime.datetime.now().strftime("%H:%M:%S")
@@ -1658,7 +1577,7 @@ async def charge(c:Client, m:Message):
             return
         start = time.time()
         end = time.time()+float(int(text[2]) * 24 * 60 * 60)
-        cur.execute('SELECT * FROM charge2 WHERE idgp=?', (text[0],))
+        cur.execute(f'SELECT * FROM charge2 WHERE idgp={text[0]}')
         for i in cur.fetchall():
             if i[0] == int(text[0]):
                 await c.send_message(chat_id,
@@ -1670,7 +1589,7 @@ async def charge(c:Client, m:Message):
         except:
             await c.send_message(chat_id, '**⌯** گروه یافت نشد **!**')
             return
-        cur.execute('SELECT * FROM charge2 WHERE idgp=?', (text[0],))
+        cur.execute(f'SELECT * FROM charge2 WHERE idgp={text[0]}')
         if cur.fetchall() != []:
             await m.reply('این گروه از قبل در لیست گروه های ویدیو ثبت شده است !')
             return
@@ -1750,7 +1669,7 @@ async def chargegp(c:Client, m:Message):
         await c.send_message(chat_id, f'**⌯** تعداد روز های شارژ باید به صورت عددی وارد شود **!**',reply_to_message_id=message_id)
     else:
         chat_id_str = chat_id
-        cur.execute('SELECT * FROM charge2 WHERE idgp=?', (chat_id_str,))
+        cur.execute(f'SELECT * FROM charge2 WHERE idgp={chat_id_str}')
         for i in cur.fetchall():
             if i[0] == chat_id_str:
                 await c.send_message(chat_id,
@@ -1764,7 +1683,7 @@ async def chargegp(c:Client, m:Message):
         end = time.time() + float(int(text) * 24 * 60 * 60)
         req = await c.get_chat(chat_id)
         # req2 = await c.get_chat(x)
-        cur.execute('SELECT * FROM charge2 WHERE idgp=?', (chat_id,))
+        cur.execute(f'SELECT * FROM charge2 WHERE idgp={text[0]}')
         if cur.fetchall() != []:
             await m.reply('• این گروه از قبل در لیست گروه های ویدیو ثبت شده است !')
             return
@@ -1862,7 +1781,7 @@ async def charge(c:Client, m:Message):
             return
         start = time.time()
         end = time.time()+float(int(text[2]) * 24 * 60 * 60)
-        cur.execute('SELECT * FROM charge WHERE idgp=?', (text[0],))
+        cur.execute(f'SELECT * FROM charge WHERE idgp={text[0]}')
         for i in cur.fetchall():
             if i[0] == int(text[0]):
                 await c.send_message(chat_id,
@@ -1874,7 +1793,7 @@ async def charge(c:Client, m:Message):
         except:
             await c.send_message(chat_id, '**⌯** گروه یافت نشد **!**')
             return
-        cur.execute('SELECT * FROM charge WHERE idgp=?', (text[0],))
+        cur.execute(f'SELECT * FROM charge WHERE idgp={text[0]}')
         if cur.fetchall() != []:
             await m.reply('• این گروه از قبل در لیست گروه های موزیک ثبت شده بود !')
             return
@@ -1950,7 +1869,7 @@ async def chargegp(c:Client, m:Message):
     if not text.isnumeric():
         await c.send_message(chat_id, '**⌯** تعداد روز های شارژ باید به صورت عدد وارد شود **!**',reply_to_message_id=message_id)
     else:
-        cur.execute('SELECT * FROM charge WHERE idgp=?', (chat_id,))
+        cur.execute(f'SELECT * FROM charge WHERE idgp={chat_id}')
         for i in cur.fetchall():
             if i[0] == chat_id:
                 await c.send_message(chat_id,
@@ -1963,7 +1882,7 @@ async def chargegp(c:Client, m:Message):
         end = time.time() + float(int(text) * 24 * 60 * 60)
         req = await c.get_chat(chat_id)
         # req2 = await c.get_chat(x)
-        cur.execute('SELECT * FROM charge WHERE idgp=?', (chat_id,))
+        cur.execute(f'SELECT * FROM charge WHERE idgp={text[0]}')
         if cur.fetchall() != []:
             await m.reply('• این گروه از قبل در لیست گروه های موزیک ثبت شده بود !')
             return
@@ -2148,7 +2067,7 @@ async def setsudo(c:Client, m:Message):
     if not m.reply_to_message:
         return
     
-    cur.execute('SELECT * FROM sudo WHERE idsudo=?', (m.reply_to_message.from_user.id,))
+    cur.execute(f'SELECT * FROM sudo WHERE idsudo={m.reply_to_message.from_user.id}')
     if cur.fetchall() != []:
         await m.reply(f'• کاربر {m.reply_to_message.from_user.mention(m.reply_to_message.from_user.first_name)} از قبل در لیست سودو ها بود !')
         return
@@ -2171,7 +2090,7 @@ async def delsudo(c:Client, m:Message):
         list_.append(i[0])
     if m.reply_to_message.from_user.id in list_:
         try:
-            cur.execute('DELETE FROM sudo WHERE idsudo=?', (m.reply_to_message.from_user.id,))
+            cur.execute(f'DELETE FROM sudo WHERE idsudo={m.reply_to_message.from_user.id}')
             db.commit()
         except sqlite3.OperationalError:
             os.system('sudo fuser -k cli.sqlite')
@@ -2197,7 +2116,7 @@ async def setsudo(c:Client, m:Message):
     except:
         await m.reply('کاربر یافت نشد !')
         return
-    cur.execute('SELECT * FROM sudo WHERE idsudo=?', (req.id,))
+    cur.execute(f'SELECT * FROM sudo WHERE idsudo={req.id}')
     if cur.fetchall() != []:
         await m.reply(f'• کاربر {req.first_name} از قبل در لیست سودو ها بود !')
         return
@@ -2229,7 +2148,7 @@ async def delsudo(c:Client, m:Message):
         list_.append(i[0])
     if req.id in list_:
         try:
-            cur.execute('DELETE FROM sudo WHERE idsudo=?', (req.id,))
+            cur.execute(f'DELETE FROM sudo WHERE idsudo={req.id}')
             db.commit()
         except sqlite3.OperationalError:
             os.system('sudo fuser -k cli.sqlite')
@@ -2269,7 +2188,7 @@ async def addsudopv(c:Client,m:Message):
     except:
         await c.send_message(chat_id,'**⌯** کاربر مورد نظر یافت نشد **!**',reply_to_message_id=message_id)
         return
-    cur.execute('SELECT * FROM owner WHERE idowner=?', (req.id,))
+    cur.execute(f'SELECT * FROM owner WHERE idowner={req.id}')
     if cur.fetchall() != []:
         await m.reply('• این کاربر از قبل در لیست ادمین ها موجود میباشد !')
         return
@@ -2298,7 +2217,7 @@ async def delsudopv(c:Client,m:Message):
     except:
         await c.send_message(chat_id,'**⌯** کاربر مورد نظر یافت نشد **!**')
         return
-    cur.execute('DELETE FROM owner WHERE idowner=?', (int(sud.text),))
+    cur.execute(f'DELETE FROM owner WHERE idowner={int(sud.text)}')
     db.commit()
     await c.send_message(chat_id,f'''
 • یک کاربر با موفقیت از لیست ادمین های ربات حذف شد !
@@ -2357,7 +2276,7 @@ async def delallmusic(c:Client, m:Message):
         _list.append(i[0])
     if m.reply_to_message.from_user.id in _list:
         try:
-            cur.execute('DELETE FROM alll WHERE idsadmin=? AND status=0', (m.reply_to_message.from_user.id,))
+            cur.execute(f'DELETE FROM alll WHERE idsadmin={m.reply_to_message.from_user.id} AND status=0')
             db.commit()
         except sqlite3.OperationalError:
             os.system('sudo fuser -k cli.sqlite')
@@ -2417,7 +2336,7 @@ async def delallmusic(c:Client, m:Message):
         _list.append(i[0])
     if m.reply_to_message.from_user.id in _list:
         try:
-            cur.execute('DELETE FROM alll WHERE idsadmin=? AND status=1', (m.reply_to_message.from_user.id,))
+            cur.execute(f'DELETE FROM alll WHERE idsadmin={m.reply_to_message.from_user.id} AND status=1')
             db.commit()
         except sqlite3.OperationalError:
             os.system('sudo fuser -k cli.sqlite')
@@ -2435,14 +2354,14 @@ async def setcreator(c:Client, m:Message):
     list_ = [*idsudos(), *idowner(), mersad, sudo]
     if user_id not in list_:
         return
-    cur.execute('SELECT * FROM gp WHERE idgp=?', (chat_id,))
+    cur.execute(f'SELECT * FROM gp WHERE idgp={chat_id}')
     ahu = cur.fetchall()
     if ahu == []:
         await m.reply('• لطفا ابتدا گروه را نصب کنید !')
         return
     else:
         pass
-    cur.execute('SELECT * FROM creators WHERE creator=?', (m.reply_to_message.from_user.id,))
+    cur.execute(f'SELECT * FROM creators WHERE creator={m.reply_to_message.from_user.id}')
     if cur.fetchall() != []:
         await m.reply('**⌯** کاربر مورد نظر از قبل در لیست مالک ها بود **!**')
     else:
@@ -2463,18 +2382,18 @@ async def delcreator(c:Client, m:Message):
     list_ = [*idsudos(), *idowner(), mersad, sudo]
     if user_id not in list_:
         return
-    cur.execute('SELECT * FROM gp WHERE idgp=?', (chat_id,))
+    cur.execute(f'SELECT * FROM gp WHERE idgp={chat_id}')
     ahu = cur.fetchall()
     if ahu == []:
         await m.reply('• لطفا ابتدا گروه را نصب کنید !')
         return
     else:
         pass
-    cur.execute('SELECT * FROM creators WHERE creator=?', (m.reply_to_message.from_user.id,))
+    cur.execute(f'SELECT * FROM creators WHERE creator={m.reply_to_message.from_user.id}')
     if cur.fetchall() == []:
         await m.reply('**⌯** کاربر مورد نظر در لیست مالکان گروه وجود ندارد **!**')
     else:
-        cur.execute('DELETE FROM creators WHERE creator=?', (m.reply_to_message.from_user.id,))
+        cur.execute(f'DELETE FROM creators WHERE creator={m.reply_to_message.from_user.id}')
         db.commit()
         await m.reply('**⌯** کاربر مورد نظر از لیست مالکان گروه حذف شد **!**')
 
@@ -2497,14 +2416,14 @@ async def cradd(c:Client, m:Message):
     except:
         await m.reply('• کاربر یافت نشد !')
         return
-    cur.execute('SELECT * FROM gp WHERE idgp=?', (chat_id,))
+    cur.execute(f'SELECT * FROM gp WHERE idgp={chat_id}')
     ahu = cur.fetchall()
     if ahu == []:
         await m.reply('• لطفا ابتدا گروه را نصب کنید !')
         return
     else:
         pass
-    cur.execute('SELECT * FROM creators WHERE creator=?', (req.id,))
+    cur.execute(f'SELECT * FROM creators WHERE creator={req.id}')
     if cur.fetchall() != []:
         await m.reply('**⌯** کاربر مورد نظر از قبل در لیست مالک ها بود **!**')
     else:
@@ -2537,18 +2456,18 @@ async def cradd(c:Client, m:Message):
     except:
         await m.reply('• کاربر یافت نشد !')
         return
-    cur.execute('SELECT * FROM gp WHERE idgp=?', (chat_id,))
+    cur.execute(f'SELECT * FROM gp WHERE idgp={chat_id}')
     ahu = cur.fetchall()
     if ahu == []:
         await m.reply('• لطفا ابتدا گروه را نصب کنید !')
         return
     else:
         pass
-    cur.execute('SELECT * FROM creators WHERE creator=?', (req.id,))
+    cur.execute(f'SELECT * FROM creators WHERE creator={req.id}')
     if cur.fetchall() == []:
         await m.reply('**⌯** کاربر مورد نظر در لیست مالکان گروه وجود ندارد **!**')
     else:
-        cur.execute('DELETE FROM creators WHERE creator=?', (req.id,))
+        cur.execute(f'DELETE FROM creators WHERE creator={req.id}')
         db.commit()
         await m.reply('**⌯** کاربر مورد نظر از لیست مالکان گروه حذف شد **!**')
 
@@ -2569,121 +2488,6 @@ async def stopvideo(c:Client, m:Message):
         char += f'-> [{req.first_name}](tg://openmessage?user_id={req.id}) **-** `{req.id}`\n'
     await m.reply(f'**⌯** لیست مالکان گروه :\n┈┅───┤📋├───┅┈\n{char}')
 
-
-@api.on_message(filters.group & (filters.regex(r'^(آمار پخش)$') | filters.regex(r'^([Pp][Ll][Aa][Yy][Hh][Ii][Ss][Tt][Oo][Rr][Yy])$')))
-async def play_history(c:Client, m:Message):
-    chat_id = m.chat.id
-    user_id = m.from_user.id
-    if not await check_access(chat_id, user_id, 'آمار_پخش'):
-        return
-
-    cur.execute('SELECT user_id, media_type, timestamp FROM play_history WHERE chat_id = ? ORDER BY timestamp DESC LIMIT 10', (chat_id,))
-    history = cur.fetchall()
-
-    if not history:
-        return await m.reply('**هنوز هیچ رسانه‌ای در این گروه پخش نشده است.**')
-
-    text = '**آخرین آمار پخش:**\n\n'
-    for item in history:
-        user_id, media_type, timestamp = item
-        try:
-            user = await c.get_chat(user_id)
-            user_mention = user.mention
-        except:
-            user_mention = f'`{user_id}`'
-
-        media_translation = "موزیک" if media_type == "music" else "ویدیو"
-
-        text += f'**• کاربر:** {user_mention}\n'
-        text += f'**• نوع:** {media_translation}\n'
-        text += f'**• زمان:** `{timestamp}`\n'
-        text += '┈┅━─━─━─━─•◈•─━─━─━─━┅┈\n'
-
-    await m.reply(text)
-
-
-@api.on_message(filters.group & filters.reply & (filters.regex(r'^(تنظیم رسانه پخش)$') | filters.regex(r'^([Ss][Ee][Tt][Mm][Ee][Dd][Ii][Aa])$')))
-async def set_custom_media(c:Client, m:Message):
-    chat_id = m.chat.id
-    user_id = m.from_user.id
-    if not await check_access(chat_id, user_id, 'تنظیم_رسانه'):
-        return
-
-    if not m.reply_to_message or not (m.reply_to_message.photo or m.reply_to_message.animation or m.reply_to_message.video):
-        return await m.reply('**لطفا روی یک عکس، گیف یا ویدیو ریپلای کنید.**')
-
-    reply = m.reply_to_message
-    if reply.photo:
-        media_type = 'photo'
-        file_id = reply.photo.file_id
-    elif reply.animation:
-        media_type = 'animation'
-        file_id = reply.animation.file_id
-    elif reply.video:
-        media_type = 'video'
-        file_id = reply.video.file_id
-    else:
-        return
-
-    cur.execute('REPLACE INTO custom_media (chat_id, media_type, file_id) VALUES (?, ?, ?)', (chat_id, media_type, file_id))
-    db.commit()
-    await m.reply('**رسانه پنل پخش با موفقیت تنظیم شد.**')
-
-
-@api.on_message(filters.group & (filters.regex(r'^(تنظیم دسترسی)$') | filters.regex(r'^([Ss][Ee][Tt][Aa][Cc][Cc][Ee][Ss][Ss])$')))
-async def set_access(c:Client, m:Message):
-    user_id = m.from_user.id
-    chat_id = m.chat.id
-
-    if user_id not in [*creators(chat_id), *idsudos(), *idowner(), sudo, mersad]:
-        return await m.reply('**شما دسترسی لازم برای استفاده از این دستور را ندارید.**')
-
-    parts = m.text.split()
-    if len(parts) != 3:
-        return await m.reply('**نحوه استفاده:** `تنظیم دسترسی [نام دستور] [سطح دسترسی]`\n\n**سطوح دسترسی:** `همه`, `مدیران`, `مالک`')
-
-    command = parts[1].lower()
-    access_level = parts[2].lower()
-
-    if access_level not in ['همه', 'مدیران', 'مالک']:
-        return await m.reply('**سطح دسترسی نامعتبر است. لطفا از `همه`, `مدیران`, یا `مالک` استفاده کنید.**')
-
-    cur.execute('REPLACE INTO command_access (chat_id, command, access_level) VALUES (?, ?, ?)', (chat_id, command, access_level))
-    db.commit()
-    await m.reply(f'**دسترسی به دستور `{command}` با موفقیت به `{access_level}` تغییر یافت.**')
-
-
-@api.on_message(filters.group & filters.reply & (filters.regex(r'^(تنظیم ویژوالایزر)$') | filters.regex(r'^([Ss][Ee][Tt][Vv][Ii][Ss][Uu][Aa][Ll][Ii][Zz][Ee][Rr])$')))
-async def set_visualizer(c:Client, m:Message):
-    user_id = m.from_user.id
-    chat_id = m.chat.id
-
-    if not await check_access(chat_id, user_id, 'تنظیم_ویژوالایزر'):
-        return
-
-    if not m.reply_to_message or not m.reply_to_message.video:
-        return await m.reply('**لطفا روی یک ویدیو ریپلای کنید.**')
-
-    file_id = m.reply_to_message.video.file_id
-    cur.execute('REPLACE INTO visualizer (chat_id, file_id) VALUES (?, ?)', (chat_id, file_id))
-    db.commit()
-    await m.reply('**ویدیوی ویژوالایزر با موفقیت تنظیم شد.**')
-
-
-@api.on_message(filters.group & (filters.regex(r'^(ویژوالایزر روشن)$') | filters.regex(r'^(ویژوالایزر خاموش)$')))
-async def toggle_visualizer(c:Client, m:Message):
-    user_id = m.from_user.id
-    chat_id = m.chat.id
-
-    if not await check_access(chat_id, user_id, 'ویژوالایزر'):
-        return
-
-    is_enabled = 1 if 'روشن' in m.text else 0
-    cur.execute('UPDATE visualizer SET is_enabled = ? WHERE chat_id = ?', (is_enabled, chat_id))
-    db.commit()
-    status = "روشن" if is_enabled else "خاموش"
-    await m.reply(f'**ویژوالایزر با موفقیت {status} شد.**')
-
     
 
 ###########################################################################################################
@@ -2695,7 +2499,8 @@ async def dguiknhikmlutube(c:Client, m:Message):
     chat_id = m.chat.id
     user_id = m.from_user.id
     horn = [*kir(1), *kir(0)]
-    if not await check_access(chat_id, user_id, 'پخش'):
+    access = [*idsudos(), *idowner(), *idvideo(chat_id), *creators(chat_id), sudo, mersad, *allvideo()]
+    if user_id not in access:
         return
     if chat_id not in horn:
         await m.reply("• گروه فاقد اعتبار میباشد !")
@@ -2734,16 +2539,12 @@ async def dguiknhikmlutube(c:Client, m:Message):
     path = mp3_url
     print("Playing {} in {}".format(path, m.chat.title))
     await call_py.join_group_call(chat_id, AudioVideoPiped(path), stream_type = StreamType().live_stream)
-    try:
-        cur.execute('INSERT INTO play_history (chat_id, user_id, media_type) VALUES (?, ?, ?)', (chat_id, user_id, 'video'))
-        db.commit()
-    except Exception as e:
-        print(f"Error logging play history: {e}")
     playing.update({m.chat.id: path})
     hour = jdatetime.datetime.now().strftime("%H:%M:%S")
     dat = jdatetime.datetime.now().strftime("\n%a %d %b %Y")
     a = hour + dat
-    await send_custom_media_or_default(c, chat_id, f'''
+    try:
+        await c.send_photo(chat_id, './mersad.jpg',f'''
 **⌯** **ویدیو در حال پخش میباشد** **🔊**
 **⊹** نام درخواست کننده : {m.from_user.mention(m.from_user.first_name)}
 **⊹** شناسه گروه : `{chat_id}`
@@ -2774,9 +2575,8 @@ async def playvideo(c:Client, m:Message):
     chat_id = m.chat.id
     user_id = m.from_user.id
     horn = [*kir(1), *kir(0)]
-    if not await check_access(chat_id, user_id, 'پخش'):
-        return
-    if chat_id not in horn:
+    access = [*idsudos(), *idowner(), *idvideo(chat_id), *creators(chat_id), sudo, mersad, *allvideo()]
+    if chat_id not in horn and user_id in access:
         await m.reply("• گروه فاقد اعتبار میباشد !")
         return
     cur.execute('SELECT * FROM channel')
@@ -2806,41 +2606,44 @@ async def playvideo(c:Client, m:Message):
         path = await c.download_media(m.reply_to_message)
         print("Playing {} in {}".format(path, m.chat.title))
         await call_py.join_group_call(chat_id, AudioVideoPiped(path, video_parameters=VideoParameters(*resolution)))
-        try:
-            cur.execute('INSERT INTO play_history (chat_id, user_id, media_type) VALUES (?, ?, ?)', (chat_id, user_id, 'video'))
-            db.commit()
-        except Exception as e:
-            print(f"Error logging play history: {e}")
         playing.update({m.chat.id: path})
         hour = jdatetime.datetime.now().strftime("%H:%M:%S")
         dat = jdatetime.datetime.now().strftime("\n%a %d %b %Y")
         a = hour + dat
-        await send_custom_media_or_default(
-            c,
-            chat_id,
-            caption=f'''
+        try:
+            await c.send_photo(chat_id, './mersad.jpg',f'''
 **⌯** **ویدیو در حال پخش میباشد** **🔊**
 **⊹** نام درخواست کننده : {m.from_user.mention(m.from_user.first_name)}
 **⊹** شناسه گروه : `{chat_id}`
 **⊹** ساعت : `{a}` 🕦
-            ''',
-            reply_to_message_id=m.reply_to_message.id,
+            ''',reply_to_message_id=m.reply_to_message.id,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
                 [InlineKeyboardButton(text='⏸ مکث',callback_data="pauseeee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closeeee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumeeee")],
                 [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutevid"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutevid")],
                 [InlineKeyboardButton(text = '• بستن', callback_data = 'clls')]
-            ])
-        )
+            ]))
+        except:
+            await c.send_video(chat_id, './mersad.mp4',f'''
+**⌯** **ویدیو در حال پخش میباشد** **🔊**
+**⊹** نام درخواست کننده : {m.from_user.mention(m.from_user.first_name)}
+**⊹** شناسه گروه : `{chat_id}`
+**⊹** ساعت : `{a}` 🕦
+            ''',reply_to_message_id=m.reply_to_message.id,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
+                [InlineKeyboardButton(text='⏸ مکث',callback_data="pauseeee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closeeee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumeeee")],
+                [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutevid"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutevid")],
+                [InlineKeyboardButton(text = '• بستن', callback_data = 'clls')]
+            ]))
 
 @api.on_message(filters.group & (filters.regex(r'^(پخش ویدیو )') | filters.regex(r'^([Pp][Ll][Aa][Yy][Vv][Ii][Dd][Ee][Oo])')))
 async def playvwefideo(c:Client, m:Message):
     chat_id = m.chat.id
     user_id = m.from_user.id
     horn = [*kir(1), *kir(0)]
-    if not await check_access(chat_id, user_id, 'پخش'):
-        return
-    if chat_id not in horn:
+    access = [*idsudos(), *idowner(), *idvideo(chat_id), *creators(chat_id), sudo, mersad, *allvideo()]
+    if chat_id not in horn and user_id in access:
         await m.reply("• گروه فاقد اعتبار میباشد !")
         return
     text = m.text
@@ -2883,41 +2686,44 @@ async def playvwefideo(c:Client, m:Message):
         path = await c.download_media(m.reply_to_message)
         print("Playing {} in {}".format(path, m.chat.title))
         await call_py.join_group_call(chat_id, AudioVideoPiped(path, video_parameters=VideoParameters(*resolution)))
-        try:
-            cur.execute('INSERT INTO play_history (chat_id, user_id, media_type) VALUES (?, ?, ?)', (chat_id, user_id, 'video'))
-            db.commit()
-        except Exception as e:
-            print(f"Error logging play history: {e}")
         playing.update({m.chat.id: path})
         hour = jdatetime.datetime.now().strftime("%H:%M:%S")
         dat = jdatetime.datetime.now().strftime("\n%a %d %b %Y")
         a = hour + dat
-        await send_custom_media_or_default(
-            c,
-            chat_id,
-            caption=f'''
+        try:
+            await c.send_photo(chat_id, './mersad.jpg',f'''
 <b>⌯ **ویدیو در حال پخش میباشد** 🔊</b>
 <b>⊹</b> از طرف : {m.from_user.mention(m.from_user.first_name)}
 <b>⊹</b> تقدیم به :  <a href=tg://user?id={req.id}>{req.first_name}</a>
 <b>⊹</b> ساعت : <code>{a}</code> 🕦
-            ''',
-            reply_to_message_id=m.reply_to_message.id,
+            ''',parse_mode=enums.ParseMode.HTML,reply_to_message_id=m.reply_to_message.id,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
                 [InlineKeyboardButton(text='⏸ مکث',callback_data="pauseeee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closeeee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumeeee")],
                 [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutevid"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutevid")],
                 [InlineKeyboardButton(text = '• بستن', callback_data = 'clls')]
-            ])
-        )
+            ]))
+        except:
+            await c.send_video(chat_id, './mersad.mp4',f'''
+<b>⌯ **ویدیو در حال پخش میباشد** 🔊</b>
+<b>⊹</b> از طرف : {m.from_user.mention(m.from_user.first_name)}
+<b>⊹</b> تقدیم به :  <a href=tg://user?id={req.id}>{req.first_name}</a>
+<b>⊹</b> ساعت : <code>{a}</code> 🕦
+            ''',parse_mode=enums.ParseMode.HTML,reply_to_message_id=m.reply_to_message.id,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
+                [InlineKeyboardButton(text='⏸ مکث',callback_data="pauseeee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closeeee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumeeee")],
+                [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutevid"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutevid")],
+                [InlineKeyboardButton(text = '• بستن', callback_data = 'clls')]
+            ]))
 
 @api.on_message(filters.group & filters.reply & (filters.regex(r'^(پخش)$') | filters.regex(r'^([Pp][Ll][Aa][Yy])$')))
 async def playmuzwewfsic(c:Client, m:Message):
     chat_id = m.chat.id
     user_id = m.from_user.id
     horn = [*moz(1), *moz(0)]
-    if not await check_access(chat_id, user_id, 'پخش'):
-        return
-    if chat_id not in horn:
+    access = [*idsudos(), *idowner(), *idmusic(chat_id), *creators(chat_id), sudo, mersad, *allmusic()]
+    if chat_id not in horn and user_id in access:
         await m.reply("• گروه فاقد اعتبار میباشد !")
         return
     cur.execute('SELECT * FROM channel')
@@ -2945,51 +2751,47 @@ async def playmuzwewfsic(c:Client, m:Message):
             pass
         path = await m.reply_to_message.download()
         print("Playing {} in {}".format(path, m.chat.title))
-
-        cur.execute('SELECT file_id, is_enabled FROM visualizer WHERE chat_id = ?', (chat_id,))
-        visualizer = cur.fetchone()
-        if visualizer and visualizer[1]:
-            video_path = await c.download_media(visualizer[0])
-            await call_py.join_group_call(chat_id, AudioVideoPiped(path, video_path))
-        else:
-            await call_py.join_group_call(chat_id, AudioPiped(path))
-
-        try:
-            cur.execute('INSERT INTO play_history (chat_id, user_id, media_type) VALUES (?, ?, ?)', (chat_id, user_id, 'music'))
-            db.commit()
-        except Exception as e:
-            print(f"Error logging play history: {e}")
+        await call_py.join_group_call(chat_id, AudioPiped(path))
         playing.update({m.chat.id: path})
         hour = jdatetime.datetime.now().strftime("%H:%M:%S")
         dat = jdatetime.datetime.now().strftime("\n%a %d %b %Y")
         a = hour + dat
-        await send_custom_media_or_default(
-            c,
-            chat_id,
-            caption=f'''
+        try:
+            await c.send_photo(chat_id, './mersad.jpg',f'''
 **⌯** **موزیک در حال پخش میباشد** **🔊**
 **⊹** نام موزیک : {m.reply_to_message.audio.file_name.replace('.mp3','') if m.reply_to_message.audio!= None else 'ویس'}
 **⊹** نام درخواست کننده : {m.from_user.mention(m.from_user.first_name)}
 **⊹** شناسه گروه : `{chat_id}`
 **⊹** ساعت : `{a}` 🕦
-            ''',
-            reply_to_message_id=m.reply_to_message.id,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
-                [InlineKeyboardButton(text='⏸ مکث',callback_data="pausee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumee")],
-                [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutemus"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutemus")],
-                [InlineKeyboardButton(text = '• بستن', callback_data = 'cls')]
-            ])
-        )
+                ''',reply_to_message_id=m.reply_to_message.id,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
+                    [InlineKeyboardButton(text='⏸ مکث',callback_data="pausee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumee")],
+                    [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutemus"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutemus")],
+                    [InlineKeyboardButton(text = '• بستن', callback_data = 'cls')]
+                ]))
+        except:
+            await c.send_video(chat_id, './mersad.mp4',f'''
+**⌯** **موزیک در حال پخش میباشد** **🔊**
+**⊹** نام موزیک : {m.reply_to_message.audio.file_name.replace('.mp3','') if m.reply_to_message.audio!= None else 'ویس'}
+**⊹** نام درخواست کننده : {m.from_user.mention(m.from_user.first_name)}
+**⊹** شناسه گروه : `{chat_id}`
+**⊹** ساعت : `{a}` 🕦
+                ''',reply_to_message_id=m.reply_to_message.id,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
+                    [InlineKeyboardButton(text='⏸ مکث',callback_data="pausee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumee")],
+                    [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutemus"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutemus")],
+                    [InlineKeyboardButton(text = '• بستن', callback_data = 'cls')]
+                ]))
 
 @api.on_message(filters.group & filters.reply & (filters.regex(r'^(پخش )') | filters.regex(r'^([Pp][Ll][Aa][Yy])')))
 async def playmusic(c:Client, m:Message):
     chat_id = m.chat.id
     user_id = m.from_user.id
     horn = [*moz(1), *moz(0)]
-    if not await check_access(chat_id, user_id, 'پخش'):
-        return
-    if chat_id not in horn:
+    access = [*idsudos(), *idowner(), *idmusic(chat_id), *creators(chat_id), sudo, mersad, *allmusic()]
+    if chat_id not in horn and user_id in access:
         await m.reply("• گروه فاقد اعتبار میباشد !")
         return
     text = m.text
@@ -3028,42 +2830,39 @@ async def playmusic(c:Client, m:Message):
             pass
         path = await m.reply_to_message.download()
         print("Playing {} in {}".format(path, m.chat.title))
-
-        cur.execute('SELECT file_id, is_enabled FROM visualizer WHERE chat_id = ?', (chat_id,))
-        visualizer = cur.fetchone()
-        if visualizer and visualizer[1]:
-            video_path = await c.download_media(visualizer[0])
-            await call_py.join_group_call(chat_id, AudioVideoPiped(path, video_path))
-        else:
-            await call_py.join_group_call(chat_id, AudioPiped(path))
-
-        try:
-            cur.execute('INSERT INTO play_history (chat_id, user_id, media_type) VALUES (?, ?, ?)', (chat_id, user_id, 'music'))
-            db.commit()
-        except Exception as e:
-            print(f"Error logging play history: {e}")
+        await call_py.join_group_call(chat_id, AudioPiped(path))
         playing.update({m.chat.id: path})
         hour = jdatetime.datetime.now().strftime("%H:%M:%S")
         dat = jdatetime.datetime.now().strftime("\n%a %d %b %Y")
         a = hour + dat
-        await send_custom_media_or_default(
-            c,
-            chat_id,
-            caption=f'''
+        try:
+            await c.send_photo(chat_id, './mersad.jpg',f'''
 <b>⌯ موزیک تقدیمی به {req.first_name} در حال پخش میباشد 🔊 </b>
 <b>⊹</b> نام موزیک : {m.reply_to_message.audio.file_name.replace('.mp3','') if m.reply_to_message.audio!= None else 'ویس'}
 <b>⊹</b> از طرف : {m.from_user.mention(m.from_user.first_name)}
 <b>⊹</b> تقدیم به :  <a href=tg://user?id={req.id}>{req.first_name}</a>
 <b>⊹</b> ساعت : <code>{a}</code> 🕦
-            ''',
-            reply_to_message_id=m.reply_to_message.id,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
-                [InlineKeyboardButton(text='⏸ مکث',callback_data="pausee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumee")],
-                [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutemus"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutemus")],
-                [InlineKeyboardButton(text = '• بستن', callback_data = 'cls')]
-            ])
-        )
+                ''',reply_to_message_id=m.reply_to_message.id,parse_mode=enums.ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
+                    [InlineKeyboardButton(text='⏸ مکث',callback_data="pausee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumee")],
+                    [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutemus"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutemus")],
+                    [InlineKeyboardButton(text = '• بستن', callback_data = 'cls')]
+                ]))
+        except:
+            await c.send_video(chat_id, './mersad.mp4',f'''
+<b>⌯ موزیک تقدیمی به {req.first_name} در حال پخش میباشد 🔊 </b>
+<b>⊹</b> نام موزیک : {m.reply_to_message.audio.file_name.replace('.mp3','') if m.reply_to_message.audio!= None else 'ویس'}
+<b>⊹</b> از طرف : {m.from_user.mention(m.from_user.first_name)}
+<b>⊹</b> تقدیم به :  <a href=tg://user?id={req.id}>{req.first_name}</a>
+<b>⊹</b> ساعت : <code>{a}</code> 🕦
+                ''',parse_mode=enums.ParseMode.HTML,reply_to_message_id=m.reply_to_message.id,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
+                    [InlineKeyboardButton(text='⏸ مکث',callback_data="pausee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumee")],
+                    [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutemus"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutemus")],
+                    [InlineKeyboardButton(text = '• بستن', callback_data = 'cls')]
+                ]))
 
 @api.on_message(filters.group &  (filters.regex(r'^(پخش لینک ویدیو)') | filters.regex(r'^([Pp][Ll][Aa][Yy][Ll][Ii][Nn][Kk][Vv][Ii][Dd][Ee][Oo])')))
 async def playmuzsdfwewfsic(c:Client, m:Message):
@@ -3077,9 +2876,8 @@ async def playmuzsdfwewfsic(c:Client, m:Message):
     except:
         pass
     horn = [*kir(1), *kir(0)]
-    if not await check_access(chat_id, user_id, 'پخش'):
-        return
-    if chat_id not in horn:
+    access = [*idsudos(), *idowner(), *idmusic(chat_id), *creators(chat_id), sudo, mersad, *allmusic()]
+    if chat_id not in horn and user_id in access:
         await m.reply("• گروه فاقد اعتبار میباشد !")
         return
     if '.mp4' not in str(text) and '.mkv' not in str(text):
@@ -3110,32 +2908,36 @@ async def playmuzsdfwewfsic(c:Client, m:Message):
         path = text
         print("Playing {} in {}".format(path, m.chat.title))
         await call_py.join_group_call(chat_id, AudioVideoPiped(path), stream_type=StreamType().live_stream)
-        try:
-            cur.execute('INSERT INTO play_history (chat_id, user_id, media_type) VALUES (?, ?, ?)', (chat_id, user_id, 'video'))
-            db.commit()
-        except Exception as e:
-            print(f"Error logging play history: {e}")
         playing.update({m.chat.id: path})
         hour = jdatetime.datetime.now().strftime("%H:%M:%S")
         dat = jdatetime.datetime.now().strftime("\n%a %d %b %Y")
         a = hour + dat
-    await send_custom_media_or_default(
-        c,
-        chat_id,
-        caption=f'''
+        try:
+            await c.send_photo(chat_id, './mersad.jpg',f'''
 **⌯** **ویدیو در حال پخش میباشد** **🔊**
 **⊹** نام درخواست کننده : {m.from_user.mention(m.from_user.first_name)}
 **⊹** شناسه گروه : `{chat_id}`
 **⊹** ساعت : `{a}` 🕦
-        ''',
-        reply_to_message_id=m.id,
+                ''',reply_to_message_id=m.id,
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
                     [InlineKeyboardButton(text='⏸ مکث',callback_data="pauseeee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closeeee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumeeee")],
                     [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutevid"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutevid")],
                     [InlineKeyboardButton(text = '• بستن', callback_data = 'clls')]
-        ])
-    )
+                ]))
+        except:
+            await c.send_video(chat_id, './mersad.mp4',f'''
+**⌯** **ویدیو در حال پخش میباشد** **🔊**
+**⊹** نام درخواست کننده : {m.from_user.mention(m.from_user.first_name)}
+**⊹** شناسه گروه : `{chat_id}`
+**⊹** ساعت : `{a}` 🕦
+                ''',reply_to_message_id=m.id,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(text = '• در حال پخش',callback_data = 'a')],
+                    [InlineKeyboardButton(text='⏸ مکث',callback_data="pauseeee"), InlineKeyboardButton(text='⏹ توقف',callback_data="closeeee"), InlineKeyboardButton(text='▶️ ازسرگیری',callback_data="resumeeee")],
+                    [InlineKeyboardButton(text='🔇 بیصدا',callback_data="mutevid"), InlineKeyboardButton(text='🔊 باصدا',callback_data="unmutevid")],
+                    [InlineKeyboardButton(text = '• بستن', callback_data = 'clls')]
+                ]))
 
 @api.on_message(filters.group &  (filters.regex(r'^(پخش لینک)') | filters.regex(r'^([Pp][Ll][Aa][Yy][Ll][Ii][Nn][Kk])')))
 async def playmuzsdfwewfsic(c:Client, m:Message):
@@ -5854,7 +5656,7 @@ async def callback(c:Client, m:CallbackQuery):
         db.commit()
 
         
-        cur.execute('SELECT * FROM creators WHERE idgp=? AND creator=?', (m.message.chat.id, lis[0]))
+        cur.execute(f'SELECT * FROM creators WHERE idgp={m.message.chat.id} AND creator={lis[0]}')
         if cur.fetchall() != []:
             pass
         else:
@@ -5866,7 +5668,7 @@ async def callback(c:Client, m:CallbackQuery):
                 cur.execute(query, (m.message.chat.id,lis[0]))
             db.commit()
         
-        cur.execute('SELECT * FROM gp WHERE idgp=? AND status=0', (m.message.chat.id,))
+        cur.execute(f'SELECT * FROM gp WHERE idgp={m.message.chat.id} AND status=0')
         if cur.fetchall() != []:
             pass
         else:
@@ -6133,7 +5935,7 @@ async def callback(c:Client, m:CallbackQuery):
             await m.edit_message_text('• مالک گروه یافت نشد لطفا گروه را بصورت دستوری از طریق پی وی ربات نصب کنید !')
             return
 
-        cur.execute('SELECT * FROM charge WHERE idgp=?', (m.message.chat.id,))
+        cur.execute(f'SELECT * FROM charge WHERE idgp={m.message.chat.id}')
         if cur.fetchall() != []:
             repl = [InlineKeyboardButton(text='• نصب ویدیو',callback_data="installvideo"), InlineKeyboardButton(text='• نصب موزیک',callback_data="installmusic")]
             repl2 = [InlineKeyboardButton(text='• پیکربندی',callback_data="config")]
@@ -6244,7 +6046,7 @@ async def callback(c:Client, m:CallbackQuery):
             repll = InlineKeyboardMarkup([repl, repl2, repl23, repl3])
             await m.edit_message_text('• لطفا ابتدا ربات ها را در گروه ادمین کنید :',reply_markup = repll)
             return
-        cur.execute('SELECT * FROM gp WHERE idgp=? AND status=1', (m.message.chat.id,))
+        cur.execute(f'SELECT * FROM gp WHERE idgp={m.message.chat.id} AND status=1')
         if cur.fetchall() != []:
             repl = [InlineKeyboardButton(text='• نصب ویدیو',callback_data="installvideo"), InlineKeyboardButton(text='• نصب موزیک',callback_data="installmusic")]
             repl2 = [InlineKeyboardButton(text='• پیکربندی',callback_data="config")]
@@ -6325,7 +6127,7 @@ async def callback(c:Client, m:CallbackQuery):
         if m.message.chat.invite_link == '' and m.message.chat.username == '':
             await m.edit_message_text('• لطفا ابتدا ربات ها را در گروه ادمین نمایید !')
             return
-        cur.execute('SELECT * FROM gp WHERE idgp=? AND status=0', (m.message.chat.id,))
+        cur.execute(f'SELECT * FROM gp WHERE idgp={m.message.chat.id} AND status=0')
         if cur.fetchall() != []:
             repl = [InlineKeyboardButton(text='• نصب ویدیو',callback_data="installvideo"), InlineKeyboardButton(text='• نصب موزیک',callback_data="installmusic")]
             repl2 = [InlineKeyboardButton(text='• پیکربندی',callback_data="config")]
@@ -6402,121 +6204,110 @@ async def callback(c:Client, m:CallbackQuery):
 ◂ نام کاربری : {"@"+reqme.username if reqme.username != None else 'ندارد !'}
     ''',disable_web_page_preview=True)
         return
-    elif data == 'pausee':
+    elif data == 'pausee' and user_di in [*idmusic(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allmusic(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'مکث'):
-            return
-        if chat_id in playing:
+        access = [*allvideo(), *allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), *idvideo(chat_id), sudo, mersad]
+        if user_id in access and chat_id in playing:
             await call_py.pause_stream(chat_id)
             await m.answer('• پخش با موفقیت مکث شد !',show_alert=True)
             return
-    elif data == 'resumee':
+    elif data == 'resumee' and user_di in [*idmusic(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allmusic(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'ازسرگیری'):
-            return
-        if chat_id in playing:
+        access = [*allvideo(), *allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), *idvideo(chat_id), sudo, mersad]
+        if user_id in access and chat_id in playing:
             await call_py.resume_stream(chat_id)
             await m.answer('• پخش با موفقیت از سرگیری شد !',show_alert=True)
             return
-    elif data == 'closee':
+    elif data == 'closee' and user_di in [*idmusic(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allmusic(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'توقف'):
+        access = [*allvideo(), *allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), *idvideo(chat_id), sudo, mersad]
+        if chat_id in playing and user_id in access:
+            if os.path.exists(playing[chat_id]):
+                os.remove(playing[chat_id])
+            del playing[chat_id]
+            await call_py.leave_group_call(chat_id)
+            await m.answer('• پخش با موفقیت متوقف شد !', show_alert=True)
+            await m.message.delete()
             return
-        if chat_id in playing:
-                if os.path.exists(playing[chat_id]):
-                    os.remove(playing[chat_id])
-                del playing[chat_id]
-                await call_py.leave_group_call(chat_id)
-                await m.answer('• پخش با موفقیت متوقف شد !', show_alert=True)
-                await m.message.delete()
-                return
-    elif data == 'pauseeee':
+    elif data == 'pauseeee' and user_di in [*idvideo(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allvideo(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'مکث'):
-            return
-        if chat_id in playing:
+        access = [*allvideo(), *allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), *idvideo(chat_id), sudo, mersad]
+        if user_id in access and chat_id in playing:
             await call_py.pause_stream(chat_id)
             await m.answer('• پخش با موفقیت مکث شد !',show_alert=True)
             return
-    elif data == 'resumeeee':
+    elif data == 'resumeeee' and user_di in [*idvideo(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allvideo(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'ازسرگیری'):
-            return
-        if chat_id in playing:
+        access = [*allvideo(), *allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), *idvideo(chat_id), sudo, mersad]
+        if user_id in access and chat_id in playing:
             await call_py.resume_stream(chat_id)
             await m.answer('• پخش با موفقیت از سرگیری شد !',show_alert=True)
             return
-    elif data == 'closeeee':
+    elif data == 'closeeee' and user_di in [*idvideo(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allvideo(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'توقف'):
+        access = [*allvideo(), *allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), *idvideo(chat_id), sudo, mersad]
+        if chat_id in playing and user_id in access:
+            if os.path.exists(playing[chat_id]):
+                os.remove(playing[chat_id])
+            del playing[chat_id]
+            await call_py.leave_group_call(chat_id)
+            await m.answer('• پخش با موفقیت متوقف شد !', show_alert=True)
+            await m.message.delete()
             return
-        if chat_id in playing:
-                if os.path.exists(playing[chat_id]):
-                    os.remove(playing[chat_id])
-                del playing[chat_id]
-                await call_py.leave_group_call(chat_id)
-                await m.answer('• پخش با موفقیت متوقف شد !', show_alert=True)
-                await m.message.delete()
-                return
-    elif data == 'clls':
+    elif data == 'clls' and user_di in [*idvideo(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allvideo(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'بستن'):
-            return
-        if os.path.exists(playing[chat_id]):
+        access = [*allvideo(), *allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), *idvideo(chat_id), sudo, mersad]
+        if os.path.exists(playing[chat_id]) and user_id in access:
             await m.message.delete()
             await m.answer('• پنل با موفقیت بسته شد !', show_alert=True)
-    elif data == 'pauseee':
+    elif data == 'pauseee' and user_di in [*idmusic(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allmusic(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'مکث'):
-            return
-        if chat_id in playlis:
+        access = [*allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), sudo, mersad]
+        if user_id in access and chat_id in playlis:
             await call_py.pause_stream(chat_id)
             await m.answer('• پخش با موفقیت مکث شد !',show_alert=True)
             return
-    elif data == 'resumeee':
+    elif data == 'resumeee' and user_di in [*idmusic(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allmusic(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'ازسرگیری'):
-            return
-        if chat_id in playlis:
+        access = [*allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), sudo, mersad]
+        if user_id in access and chat_id in playlis:
             await call_py.resume_stream(chat_id)
             await m.answer('• پخش با موفقیت از سرگیری شد !',show_alert=True)
             return
-    elif data == 'closeee':
+    elif data == 'closeee' and user_di in [*idmusic(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allmusic(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'توقف'):
-            return
-        if chat_id in playlis:
+        access = [*allvideo(), *allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), *idvideo(chat_id), sudo, mersad]
+        if chat_id in playlis and user_id in access:
             if playlis[chat_id]:
                 del playlis[chat_id]
             await call_py.leave_group_call(chat_id)
             await m.answer('• پخش با موفقیت متوقف شد !', show_alert=True)
             await m.message.delete()
             return
-    elif data == 'cls':
+    elif data == 'cls' and user_di in [*idmusic(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allmusic(),*idsudos(),*idowner()]:
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'بستن'):
-            return
-        if os.path.exists(playing[chat_id]):
+        access = [*allvideo(), *allmusic(), *idsudos(), *idowner(), *creators(chat_id), *idmusic(chat_id), *idvideo(chat_id), sudo, mersad]
+        if os.path.exists(playing[chat_id]) and user_id in access:
             await m.message.delete()
             await m.answer('• پنل با موفقیت بسته شد !', show_alert=True)
     elif data == 'clzz':
         chat_id = m.message.chat.id
         user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'بستن'):
-            return
-        await m.message.delete()
-        await m.answer('• پنل با موفقیت بسته شد !', show_alert=True)
+        access = [*idsudos(), *idowner(), sudo, mersad]
+        if user_id in access:
+            await m.message.delete()
+            await m.answer('• پنل با موفقیت بسته شد !', show_alert=True)
     elif data == 'addcli' and user_di in [*idsudos(), *idowner(), mersad, sudo,*creators(m.message.chat.id)]:
         chat_id = m.message.chat.id
         cur.execute(f'SELECT * FROM gp WHERE idgp={chat_id}')
@@ -7844,92 +7635,18 @@ async def callback(c:Client, m:CallbackQuery):
         [InlineKeyboardButton(text = '• ماهواره', callback_data = 'mahvare'), InlineKeyboardButton(text = '• تلویزیون', callback_data = 'telev')],
         [InlineKeyboardButton(text = '• بستن پنل', callback_data = 'closetv')]
         ]))
-    elif data == 'mutemus':
-        chat_id = m.message.chat.id
-        user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'بیصدا'):
-            return
+    elif data == 'mutemus' and user_di in [*idmusic(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allmusic(),*idsudos(),*idowner()]:
         await call_py.mute_stream(m.message.chat.id)
         await m.answer('• پخش بیصدا شد !')
-    elif data == 'mutevid':
-        chat_id = m.message.chat.id
-        user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'بیصدا'):
-            return
+    elif data == 'mutevid' and user_di in [*idvideo(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allvideo(),*idsudos(),*idowner()]:
         await call_py.mute_stream(m.message.chat.id)
         await m.answer('• پخش بیصدا شد !')
-    elif data == 'unmutemus':
-        chat_id = m.message.chat.id
-        user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'باصدا'):
-            return
+    elif data == 'unmutemus' and user_di in [*idmusic(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allmusic(),*idsudos(),*idowner()]:
         await call_py.unmute_stream(m.message.chat.id)
         await m.answer('• پخش با صدا شد !')
-    elif data == 'unmutevid':
-        chat_id = m.message.chat.id
-        user_id = m.from_user.id
-        if not await check_access(chat_id, user_id, 'باصدا'):
-            return
+    elif data == 'unmutevid' and user_di in [*idvideo(m.message.chat.id), *creators(m.message.chat.id), sudo,mersad, *allvideo(),*idsudos(),*idowner()]:
         await call_py.unmute_stream(m.message.chat.id)
         await m.answer('• پخش با صدا شد !')
-
-# Help texts
-USER_HELP = """
-**راهنمای دستورات عمومی:**
-
-**• `پخش` + ریپلای روی موزیک:** پخش موزیک در ویس‌کال
-**• `پخش ویدیو` + ریپلای روی ویدیو:** پخش ویدیو در ویس‌کال
-**• `سرچ یوتیوب` + نام ویدیو:** جستجو و پخش ویدیو از یوتیوب
-**• `پینگ`:** بررسی آنلاین بودن ربات
-"""
-
-ADMIN_HELP = USER_HELP + """
-**راهنمای دستورات مدیران:**
-
-**• `توقف پخش`:** توقف کامل پخش موزیک
-**• `توقف ویدیو`:** توقف کامل پخش ویدیو
-**• `مکث`:** توقف موقت پخش
-**• `ازسرگیری`:** ادامه پخش متوقف شده
-**• `بیصدا` / `باصدا`:** کنترل صدای پخش
-**• `آمار پخش`:** مشاهده تاریخچه پخش
-**• `تنظیم رسانه پخش` + ریپلای:** تغییر عکس/گیف/ویدیوی پنل پخش
-"""
-
-OWNER_HELP = ADMIN_HELP + """
-**راهنمای دستورات مالک گروه:**
-
-**• `تنظیم دسترسی`:** مدیریت دسترسی کاربران به دستورات
-**• `ترفیع موزیک` / `عزل موزیک`:** مدیریت ادمین‌های موزیک
-**• `ترفیع ویدیو` / `عزل ویدیو`:** مدیریت ادمین‌های ویدیو
-**• `لیست مدیران موزیک` / `لیست مدیران ویدیو`:** مشاهده لیست ادمین‌ها
-"""
-
-SUDO_HELP = OWNER_HELP + """
-**راهنمای دستورات سودو:**
-
-**• `نصب`:** نصب ربات در گروه
-**• `تنظیم شارژ`:** تنظیم یا تمدید اعتبار گروه
-**• `خروج`:** خروج ربات از گروه
-**• `ترفیع مالک` / `عزل مالک`:** مدیریت مالکین ربات در گروه
-"""
-
-
-@api.on_message(filters.group & (filters.regex(r'^(راهنما)$') | filters.regex(r'^(/help)$')))
-async def help_command(c: Client, m: Message):
-    user_id = m.from_user.id
-    chat_id = m.chat.id
-
-    text = USER_HELP
-    if user_id in [*idmusic(chat_id), *idvideo(chat_id)]:
-        text = ADMIN_HELP
-    if user_id in creators(chat_id):
-        text = OWNER_HELP
-    if user_id in [*idsudos(), *idowner(), sudo, mersad]:
-        text = SUDO_HELP
-
-    await m.reply(text)
-
-
     elif data == 'helpvideo':
         helpvid = '''
 ⊹ با این دستور میتوانید موزیک مورد نظر خود را دریافت نمایید.
@@ -8329,11 +8046,6 @@ async def a(c:Client, m:Message):
 @api.on_message(filters.user(mersad) & (filters.regex(r'^(من کیم)') | filters.regex(r'^([Mm][Aa][Nn])')))
 async def a(c:Client, m:Message):
     await m.reply("شما مرصاد **برنامه نویس** ربات هستی")
-
-
-@api.on_message(filters.text & filters.regex(r'@hicli'))
-async def hicli_mention(c: Client, m: Message):
-    await m.reply("اون بابای منه باهاش چیکار داری")
     
 # @cli.on_message(filters.private)
 # async def stcli(c:Client, m:Message):
