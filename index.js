@@ -16,14 +16,15 @@ CREATE TABLE fortune_quizzes (id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id TEX
 
 CREATE TABLE fortune_answers (id INTEGER PRIMARY KEY AUTOINCREMENT, quiz_id INTEGER NOT NULL, responder_id TEXT NOT NULL, answers TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 
-INSERT INTO settings (key, value) VALUES ('channel_id', '@aminiytblog');
+INSERT INTO settings (key, value) VALUES ('channel_id', '@hicli_ch');
 INSERT INTO settings (key, value) VALUES ('bot_active', '1');
+INSERT INTO settings (key, value) VALUES ('force_join', '1');
 */
 
 // ⚠️ این ۳ خط را ویرایش کنید:
 const API_KEY = '5007870012:AAF1hNYiirpSRaAgb2AuLsmWhqK8a3rYOKQ';
-const BOT_USERNAME = 'aminiytblog_bot';
-const ADMINS = ['admin1', 'admin2'];
+const BOT_USERNAME = 'PEARRebot';
+const ADMINS = ['419573954', '1022284349'];
 
 export default {
   async fetch(request, env, ctx) {
@@ -54,7 +55,10 @@ export default {
 
     async function checkMembership(userId) {
       try {
-        let channelId = '@aminiytblog';
+        const fj = await db.prepare('SELECT value FROM settings WHERE key = ?').bind('force_join').first();
+        if (fj && fj.value === '0') return true; // عضویت اجباری غیرفعال است
+
+        let channelId = '@hicli_ch';
         try {
           const s = await db.prepare('SELECT value FROM settings WHERE key = ?').bind('channel_id').first();
           if (s) channelId = s.value;
@@ -64,13 +68,13 @@ export default {
         if (r.ok) return ['member', 'administrator', 'creator'].includes(r.result.status);
         return false;
       } catch (e) {
-        return true;
+        return true; // در صورت بروز خطا، اجازه دسترسی می‌دهیم
       }
     }
 
-    function isAdmin(username) {
-      if (!username) return false;
-      return ADMINS.map(a => a.toLowerCase()).includes(username.toLowerCase());
+    function isAdmin(userId) {
+      if (!userId) return false;
+      return ADMINS.includes(String(userId));
     }
 
     function generateCode() {
@@ -78,6 +82,55 @@ export default {
       let code = '';
       for (let i = 0; i < 8; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
       return code;
+    }
+
+    async function getLivePrices() {
+      try {
+        // For now, we'll use a mock API. In a real scenario, this would fetch from a live service.
+        const dollarToToman = 60000; // Mock exchange rate
+        const prices = {
+          gold: { usd: 2300 },
+          silver: { usd: 27 },
+          copper: { usd: 4.5 },
+          bitcoin: { usd: 65000 },
+          ethereum: { usd: 3500 },
+          ripple: { usd: 0.5 },
+          // Add 12 more famous currencies
+          litecoin: { usd: 80 },
+          cardano: { usd: 0.45 },
+          solana: { usd: 150 },
+          dogecoin: { usd: 0.15 },
+          tron: { usd: 0.12 },
+          polkadot: { usd: 7.5 },
+          chainlink: { usd: 18 },
+          binancecoin: { usd: 600 },
+          stellar: { usd: 0.11 },
+          monero: { usd: 140 },
+          uniswap: { usd: 10 },
+          avalanche: { usd: 35 }
+        };
+
+        let keyboard = [];
+        keyboard.push([{ text: 'نام', callback_data: 'noop' }, { text: 'تومان', callback_data: 'noop' }, { text: 'دلار', callback_data: 'noop' }]);
+
+        const formatToman = (price) => {
+          if (price >= 1000) return `${(price / 1000).toFixed(0)}K`;
+          return price.toFixed(0);
+        }
+
+        Object.entries(prices).forEach(([name, data]) => {
+          const tomanPrice = data.usd * dollarToToman;
+          keyboard.push([
+            { text: name.charAt(0).toUpperCase() + name.slice(1), callback_data: 'noop' },
+            { text: formatToman(tomanPrice), callback_data: 'noop' },
+            { text: `$${data.usd}`, callback_data: 'noop' }
+          ]);
+        });
+
+        return { text: '📈 <b>قیمت‌های لحظه‌ای</b>', keyboard: keyboard };
+      } catch (e) {
+        return { text: 'خطا در دریافت قیمت‌ها.', keyboard: null };
+      }
     }
 
     // ======== صفحه تست ========
@@ -106,7 +159,7 @@ export default {
 
           // ذخیره کاربر
           try {
-            await db.prepare('INSERT OR IGNORE INTO users (user_id, username, first_name, is_admin) VALUES (?, ?, ?, ?)').bind(String(userId), username, firstName, isAdmin(username) ? 1 : 0).run();
+            await db.prepare('INSERT OR IGNORE INTO users (user_id, username, first_name, is_admin) VALUES (?, ?, ?, ?)').bind(String(userId), username, firstName, isAdmin(userId) ? 1 : 0).run();
           } catch (e) {}
 
           // ===== /start =====
@@ -164,15 +217,21 @@ export default {
                 [
                   { text: '💬 چت ناشناس', callback_data: 'menu_anon' },
                   { text: '🔮 آینده‌بین', callback_data: 'menu_fortune' }
-                ]
+                ],
+                [{ text: '📈 قیمت لحظه‌ای', callback_data: 'live_prices' }]
               ];
-              if (isAdmin(username)) {
+              if (isAdmin(userId)) {
                 keyboard.push([{ text: '⚙️ پنل مدیریت', callback_data: 'admin_panel' }]);
               }
               await sendMessage(chatId, `👋 سلام <b>${firstName}</b>!\n\n🎉 به جعبه ابزار خوش آمدید!`, keyboard);
             } else {
+              let channelId = '@hicli_ch';
+              try {
+                const s = await db.prepare('SELECT value FROM settings WHERE key = ?').bind('channel_id').first();
+                if (s) channelId = s.value.startsWith('@') ? s.value.substring(1) : s.value;
+              } catch (e) {}
               await sendMessage(chatId, '⚠️ برای استفاده از ربات، ابتدا در کانال عضو شوید.', [
-                [{ text: '📢 عضویت', url: 'https://t.me/aminiytblog' }],
+                [{ text: '📢 عضویت', url: `https://t.me/${channelId}` }],
                 [{ text: '✅ بررسی', callback_data: 'check_membership' }]
               ]);
             }
@@ -233,10 +292,30 @@ export default {
             }
           } catch (e) {}
 
+          // ===== ارسال پیام همگانی =====
+          try {
+            const broadcasting = await kv.get(`broadcast_${userId}`);
+            if (broadcasting && text && isAdmin(userId)) {
+              await kv.delete(`broadcast_${userId}`);
+              const allUsers = await db.prepare('SELECT user_id FROM users').all();
+              let successCount = 0;
+              if (allUsers.results) {
+                for (const user of allUsers.results) {
+                  const sent = await sendMessage(user.user_id, text);
+                  if (sent.ok) {
+                    successCount++;
+                  }
+                }
+              }
+              await sendMessage(chatId, `✅ پیام با موفقیت به ${successCount} نفر از ${allUsers.results.length} کاربر ارسال شد.`);
+              return new Response('ok');
+            }
+          } catch (e) {}
+
           // ===== تنظیم کانال =====
           try {
             const settingCh = await kv.get(`setch_${userId}`);
-            if (settingCh && text && isAdmin(username)) {
+            if (settingCh && text && isAdmin(userId)) {
               await db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('channel_id', text).run();
               await sendMessage(chatId, `✅ کانال به ${text} تغییر کرد.`);
               await kv.delete(`setch_${userId}`);
@@ -400,12 +479,12 @@ export default {
 
           // پنل مدیریت
           if (data === 'admin_panel') {
-            if (!isAdmin(username)) {
+            if (!isAdmin(userId)) {
               await sendMessage(chatId, '❌ دسترسی ندارید.');
               return new Response('ok');
             }
 
-            let userCount = 0, channelId = '@aminiytblog', botActive = '1';
+            let userCount = 0, channelId = '@hicli_ch', botActive = '1', forceJoin = '1';
             try {
               const uc = await db.prepare('SELECT COUNT(*) as c FROM users').first();
               userCount = uc?.c || 0;
@@ -413,10 +492,14 @@ export default {
               if (ch) channelId = ch.value;
               const ba = await db.prepare('SELECT value FROM settings WHERE key = ?').bind('bot_active').first();
               if (ba) botActive = ba.value;
+              const fj = await db.prepare('SELECT value FROM settings WHERE key = ?').bind('force_join').first();
+              if (fj) forceJoin = fj.value;
             } catch (e) {}
 
-            await sendMessage(chatId, `⚙️ <b>پنل مدیریت</b>\n\n👥 کاربران: ${userCount}\n📢 کانال: ${channelId}\n🔌 وضعیت: ${botActive === '1' ? '✅ روشن' : '❌ خاموش'}`, [
+            await sendMessage(chatId, `⚙️ <b>پنل مدیریت</b>\n\n👥 کاربران: ${userCount}\n📢 کانال: ${channelId}\n🔌 وضعیت: ${botActive === '1' ? '✅ روشن' : '❌ خاموش'}\n🔗 عضویت اجباری: ${forceJoin === '1' ? '✅ فعال' : '❌ غیرفعال'}`, [
+              [{ text: '🗣️ پیام همگانی', callback_data: 'broadcast' }],
               [{ text: botActive === '1' ? '🔴 خاموش کردن' : '🟢 روشن کردن', callback_data: 'toggle_bot' }],
+              [{ text: forceJoin === '1' ? '🔗 غیرفعال کردن عضویت' : '🔗 فعال کردن عضویت', callback_data: 'toggle_force_join' }],
               [{ text: '📢 تغییر کانال', callback_data: 'change_channel' }],
               [{ text: '📊 آمار کامل', callback_data: 'full_stats' }],
               [{ text: '🔙 بازگشت', callback_data: 'back_main' }]
@@ -425,7 +508,7 @@ export default {
           }
 
           // روشن/خاموش
-          if (data === 'toggle_bot' && isAdmin(username)) {
+          if (data === 'toggle_bot' && isAdmin(userId)) {
             try {
               const current = await db.prepare('SELECT value FROM settings WHERE key = ?').bind('bot_active').first();
               const newVal = (current?.value === '1') ? '0' : '1';
@@ -435,15 +518,33 @@ export default {
             return new Response('ok');
           }
 
+          // فعال/غیرفعال کردن عضویت اجباری
+          if (data === 'toggle_force_join' && isAdmin(userId)) {
+            try {
+              const current = await db.prepare('SELECT value FROM settings WHERE key = ?').bind('force_join').first();
+              const newVal = (current?.value === '1') ? '0' : '1';
+              await db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('force_join', newVal).run();
+              await sendMessage(chatId, `✅ عضویت اجباری ${newVal === '1' ? 'فعال' : 'غیرفعال'} شد.`);
+            } catch (e) {}
+            return new Response('ok');
+          }
+
           // تغییر کانال
-          if (data === 'change_channel' && isAdmin(username)) {
+          if (data === 'change_channel' && isAdmin(userId)) {
             await kv.put(`setch_${userId}`, '1', { expirationTtl: 300 });
             await sendMessage(chatId, '📢 آیدی کانال جدید را بفرستید:\n(مثال: @channel)');
             return new Response('ok');
           }
 
+          // پیام همگانی (درخواست پیام)
+          if (data === 'broadcast' && isAdmin(userId)) {
+            await kv.put(`broadcast_${userId}`, '1', { expirationTtl: 600 });
+            await sendMessage(chatId, '📝 پیام خود را برای ارسال به همه کاربران بنویسید:');
+            return new Response('ok');
+          }
+
           // آمار کامل
-          if (data === 'full_stats' && isAdmin(username)) {
+          if (data === 'full_stats' && isAdmin(userId)) {
             let users = 0, msgs = 0, quizzes = 0;
             try {
               const u = await db.prepare('SELECT COUNT(*) as c FROM users').first();
@@ -466,10 +567,20 @@ export default {
                 { text: '🔮 آینده‌بین', callback_data: 'menu_fortune' }
               ]
             ];
-            if (isAdmin(username)) {
+            if (isAdmin(userId)) {
               keyboard.push([{ text: '⚙️ پنل مدیریت', callback_data: 'admin_panel' }]);
             }
             await sendMessage(chatId, '🏠 <b>منوی اصلی</b>', keyboard);
+            return new Response('ok');
+          }
+
+          // قیمت لحظه‌ای
+          if (data === 'live_prices') {
+            const { text, keyboard } = await getLivePrices();
+            if (keyboard) {
+                keyboard.push([{ text: '🔙 بازگشت', callback_data: 'back_main' }]);
+            }
+            await sendMessage(chatId, text, keyboard);
             return new Response('ok');
           }
         }
