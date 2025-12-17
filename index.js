@@ -1,5 +1,5 @@
 // ربات تلگرام AI Toolbox
-// Telegram: t.me/aminiytblog
+// Telegram: t.me/hicli_ch
 
 /*
 دستورات SQL برای D1:
@@ -21,8 +21,9 @@ INSERT INTO settings (key, value) VALUES ('bot_active', '1');
 INSERT INTO settings (key, value) VALUES ('force_join', '1');
 */
 
-// ⚠️ این ۳ خط را ویرایش کنید:
-const API_KEY = '5007870012:AAF1hNYiirpSRaAgb2AuLsmWhqK8a3rYOKQ';
+// ⚠️ ربات برای اجرا نیازمند تنظیم متغیرهای محیطی در Cloudflare است.
+// 1. API_KEY: توکن ربات تلگرام شما
+// برای تنظیم: به داشبورد Cloudflare -> Workers & Pages -> [Worker شما] -> Settings -> Variables -> Environment Variables بروید.
 const BOT_USERNAME = 'PEARRebot';
 const ADMINS = ['419573954', '1022284349'];
 
@@ -31,6 +32,23 @@ export default {
     const url = new URL(request.url);
     const db = env.DB;
     const kv = env.KV;
+    const API_KEY = env.API_KEY;
+
+    if (!API_KEY) {
+      return new Response('API_KEY environment variable not set', { status: 500 });
+    }
+
+    // بررسی وضعیت ربات
+    try {
+      const botActive = await db.prepare('SELECT value FROM settings WHERE key = ?').bind('bot_active').first();
+      if (botActive && botActive.value === '0') {
+        const update = await request.clone().json();
+        const userId = update.message?.from?.id || update.callback_query?.from?.id;
+        if (!ADMINS.includes(String(userId))) {
+          return new Response('ok'); // ربات خاموش است
+        }
+      }
+    } catch(e) {}
 
     // ======== توابع ========
 
@@ -86,50 +104,47 @@ export default {
 
     async function getLivePrices() {
       try {
-        // For now, we'll use a mock API. In a real scenario, this would fetch from a live service.
-        const dollarToToman = 60000; // Mock exchange rate
-        const prices = {
-          gold: { usd: 2300 },
-          silver: { usd: 27 },
-          copper: { usd: 4.5 },
-          bitcoin: { usd: 65000 },
-          ethereum: { usd: 3500 },
-          ripple: { usd: 0.5 },
-          // Add 12 more famous currencies
-          litecoin: { usd: 80 },
-          cardano: { usd: 0.45 },
-          solana: { usd: 150 },
-          dogecoin: { usd: 0.15 },
-          tron: { usd: 0.12 },
-          polkadot: { usd: 7.5 },
-          chainlink: { usd: 18 },
-          binancecoin: { usd: 600 },
-          stellar: { usd: 0.11 },
-          monero: { usd: 140 },
-          uniswap: { usd: 10 },
-          avalanche: { usd: 35 }
-        };
+        const tomanRateResponse = await fetch('https://api.toman.com/v1/live-price/usdt');
+        if (!tomanRateResponse.ok) throw new Error('Failed to fetch Toman rate');
+        const tomanData = await tomanRateResponse.json();
+        const dollarToToman = tomanData.data.price;
+
+        const ids = 'gold,silver,copper,bitcoin,ethereum,ripple,litecoin,cardano,solana,dogecoin,tron,polkadot,chainlink,binancecoin,stellar,monero,uniswap,avalanche';
+        const priceResponse = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
+        if (!priceResponse.ok) throw new Error('Failed to fetch CoinGecko prices');
+        const prices = await priceResponse.json();
 
         let keyboard = [];
         keyboard.push([{ text: 'نام', callback_data: 'noop' }, { text: 'تومان', callback_data: 'noop' }, { text: 'دلار', callback_data: 'noop' }]);
 
         const formatToman = (price) => {
-          if (price >= 1000) return `${(price / 1000).toFixed(0)}K`;
-          return price.toFixed(0);
+          if (price >= 1000000) return `${(price / 1000000).toFixed(2)}M`;
+          if (price >= 1000) return `${(price / 1000).toFixed(1)}K`;
+          return price.toFixed(2);
         }
 
-        Object.entries(prices).forEach(([name, data]) => {
-          const tomanPrice = data.usd * dollarToToman;
-          keyboard.push([
-            { text: name.charAt(0).toUpperCase() + name.slice(1), callback_data: 'noop' },
-            { text: formatToman(tomanPrice), callback_data: 'noop' },
-            { text: `$${data.usd}`, callback_data: 'noop' }
-          ]);
+        const nameMap = {
+            gold: 'Gold', silver: 'Silver', copper: 'Copper', bitcoin: 'Bitcoin', ethereum: 'Ethereum', ripple: 'XRP',
+            litecoin: 'Litecoin', cardano: 'Cardano', solana: 'Solana', dogecoin: 'Dogecoin', tron: 'TRON',
+            polkadot: 'Polkadot', chainlink: 'Chainlink', binancecoin: 'BNB', stellar: 'Stellar',
+            monero: 'Monero', uniswap: 'Uniswap', avalanche: 'Avalanche'
+        };
+
+        ids.split(',').forEach(id => {
+            if (prices[id] && prices[id].usd) {
+                const tomanPrice = prices[id].usd * dollarToToman;
+                keyboard.push([
+                    { text: nameMap[id] || id, callback_data: 'noop' },
+                    { text: formatToman(tomanPrice), callback_data: 'noop' },
+                    { text: `$${prices[id].usd}`, callback_data: 'noop' }
+                ]);
+            }
         });
 
         return { text: '📈 <b>قیمت‌های لحظه‌ای</b>', keyboard: keyboard };
       } catch (e) {
-        return { text: 'خطا در دریافت قیمت‌ها.', keyboard: null };
+        console.error("Price fetch error:", e);
+        return { text: '⚠️ متاسفانه در دریافت قیمت‌های لحظه‌ای خطایی رخ داد. لطفا لحظاتی دیگر دوباره تلاش کنید.', keyboard: null };
       }
     }
 
@@ -167,10 +182,10 @@ export default {
             const parts = text.split(' ');
             const param = parts.length > 1 ? parts[1] : null;
 
-            // ===== لینک چت ناشناس (بدون چک عضویت) =====
-            if (param && param.startsWith('anon_')) {
-              const linkCode = param.replace('anon_', '');
-              try {
+            // پردازش لینک‌ها قبل از بررسی عضویت
+            if (param) {
+              if (param.startsWith('anon_')) {
+                const linkCode = param.replace('anon_', '');
                 const link = await db.prepare('SELECT * FROM anonymous_links WHERE link_code = ?').bind(linkCode).first();
                 if (link) {
                   if (link.owner_id === String(userId)) {
@@ -179,15 +194,12 @@ export default {
                     await kv.put(`anon_${userId}`, linkCode, { expirationTtl: 3600 });
                     await sendMessage(chatId, '📩 <b>چت ناشناس</b>\n\n✍️ پیام خود را بنویسید.\nهویت شما مخفی خواهد ماند.');
                   }
-                  return new Response('ok');
                 }
-              } catch (e) {}
-            }
+                return new Response('ok');
+              }
 
-            // ===== لینک آینده‌بین (بدون چک عضویت) =====
-            if (param && param.startsWith('fortune_')) {
-              const quizCode = param.replace('fortune_', '');
-              try {
+              if (param.startsWith('fortune_')) {
+                const quizCode = param.replace('fortune_', '');
                 const quiz = await db.prepare('SELECT * FROM fortune_quizzes WHERE quiz_code = ?').bind(quizCode).first();
                 if (quiz) {
                   if (quiz.owner_id === String(userId)) {
@@ -195,36 +207,18 @@ export default {
                   } else {
                     const questions = JSON.parse(quiz.questions);
                     await kv.put(`fortune_${userId}`, JSON.stringify({
-                      quizId: quiz.id,
-                      ownerId: quiz.owner_id,
-                      questions: questions,
-                      index: 0,
-                      answers: []
+                      quizId: quiz.id, ownerId: quiz.owner_id, questions: questions, index: 0, answers: []
                     }), { expirationTtl: 3600 });
                     await sendMessage(chatId, `🔮 <b>آینده‌بین</b>\n\n🎯 شما به چالش دعوت شدید!\n📝 تعداد سوالات: ${questions.length}\n\n<b>سوال ۱:</b>\n${questions[0]}`);
                   }
-                  return new Response('ok');
                 }
-              } catch (e) {}
+                return new Response('ok');
+              }
             }
 
-            // ===== منوی اصلی (با چک عضویت) =====
+            // اگر پارامتری نبود، عضویت را بررسی کن
             const isMember = await checkMembership(userId);
-
-            if (isMember) {
-              const keyboard = [
-                [{ text: '🤖 ابزارهای هوش مصنوعی', callback_data: 'menu_ai' }],
-                [
-                  { text: '💬 چت ناشناس', callback_data: 'menu_anon' },
-                  { text: '🔮 آینده‌بین', callback_data: 'menu_fortune' }
-                ],
-                [{ text: '📈 قیمت لحظه‌ای', callback_data: 'live_prices' }]
-              ];
-              if (isAdmin(userId)) {
-                keyboard.push([{ text: '⚙️ پنل مدیریت', callback_data: 'admin_panel' }]);
-              }
-              await sendMessage(chatId, `👋 سلام <b>${firstName}</b>!\n\n🎉 به جعبه ابزار خوش آمدید!`, keyboard);
-            } else {
+            if (!isMember) {
               let channelId = '@hicli_ch';
               try {
                 const s = await db.prepare('SELECT value FROM settings WHERE key = ?').bind('channel_id').first();
@@ -234,7 +228,22 @@ export default {
                 [{ text: '📢 عضویت', url: `https://t.me/${channelId}` }],
                 [{ text: '✅ بررسی', callback_data: 'check_membership' }]
               ]);
+              return new Response('ok');
             }
+
+            // نمایش منوی اصلی
+            const keyboard = [
+              [{ text: '🤖 ابزارهای هوش مصنوعی', callback_data: 'menu_ai' }],
+              [
+                { text: '💬 چت ناشناس', callback_data: 'menu_anon' },
+                { text: '🔮 آینده‌بین', callback_data: 'menu_fortune' }
+              ],
+              [{ text: '📈 قیمت لحظه‌ای', callback_data: 'live_prices' }]
+            ];
+            if (isAdmin(userId)) {
+              keyboard.push([{ text: '⚙️ پنل مدیریت', callback_data: 'admin_panel' }]);
+            }
+            await sendMessage(chatId, `👋 سلام <b>${firstName}</b>!\n\n🎉 به جعبه ابزار خوش آمدید!`, keyboard);
             return new Response('ok');
           }
 
