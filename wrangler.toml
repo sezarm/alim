@@ -1,0 +1,21 @@
+name = "telegram-bot"
+main = "index.js"
+compatibility_date = "2023-10-30"
+
+# Cron trigger to run the scheduled function every minute
+[triggers]
+crons = ["* * * * *"]
+
+# KV Namespace bindings
+# Important: You must create these namespaces in your Cloudflare account
+# and replace the placeholder IDs below with your actual IDs.
+
+[[kv_namespaces]]
+binding = "ADMINS"
+id = "YOUR_ADMINS_NAMESPACE_ID"
+preview_id = "YOUR_ADMINS_NAMESPACE_PREVIEW_ID"
+
+[[kv_namespaces]]
+binding = "SETTINGS"
+id = "YOUR_SETTINGS_NAMESPACE_ID"
+preview_id = "YOUR_SETTINGS_NAMESPACE_PREVIEW_ID"
